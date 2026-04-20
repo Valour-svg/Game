@@ -21,6 +21,27 @@ button:hover {
   background: #2e2e2e;
 }
 
+
+.status-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.status-row p {
+  margin: 4px 0;
+}
+
+#echoValue {
+  color: #d3b5ff;
+}
+
+#focusValue {
+  color: #ffe27d;
+}
+
 #game {
   position: relative;
 }
