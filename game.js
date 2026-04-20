@@ -1,3 +1,6 @@
+(function () {
+"use strict";
+
 // =======================
 // STATE
 // =======================
@@ -46,36 +49,6 @@ const enemyAttacks = {
     zoneWidthRatio: 0.12,
     perfectDamage: 2,
     failDamage: 14,
-  },
-};
-
-const ENEMY_BAR_LEFT = 50;
-const ENEMY_BAR_WIDTH = 300;
-
-const enemyAttacks = {
-  quick: {
-    key: "quick",
-    name: "QUICK STRIKE",
-    zoneStartRatio: 0.78,
-    zoneWidthRatio: 0.06,
-    failDamage: 10,
-    perfectDamage: () => Math.floor(Math.random() * 2) + 1,
-  },
-  heavy: {
-    key: "heavy",
-    name: "HEAVY STRIKE",
-    zoneStartRatio: 0.72,
-    zoneWidthRatio: 0.18,
-    failDamage: 18,
-    perfectDamage: () => 3,
-  },
-  fake: {
-    key: "fake",
-    name: "FAKE-OUT STRIKE",
-    zoneStartRatio: 0.76,
-    zoneWidthRatio: 0.12,
-    failDamage: 14,
-    perfectDamage: () => 2,
   },
 };
 
@@ -468,3 +441,6 @@ function log(text) {
   document.getElementById("log").innerHTML += "<p>" + text + "</p>";
   lastLogText = text;
 }
+
+window.selectAction = selectAction;
+})();
