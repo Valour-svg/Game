@@ -5,46 +5,47 @@
   <title>Echo Fracture Prototype</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-phase="PLANNING">
+
+  <div id="screenFlash"></div>
 
   <h1>Echo Fracture (Prototype)</h1>
 
-  <!-- 🔵 PHASE INDICATOR -->
   <h2 id="phaseIndicator">Phase: PLANNING</h2>
 
-  <!-- ❤️ HP -->
-  <div>
+  <div class="status-row">
     <p>Player HP: <span id="playerHP">100</span></p>
     <p>Enemy HP: <span id="enemyHP">100</span></p>
+    <p>Focus: <span id="focusValue">3 / 5</span></p>
+    <p>Current Echo: <span id="echoValue">None</span></p>
   </div>
 
   <div id="game">
+    <div id="floatingTextLayer"></div>
 
-    <!-- PLANNING -->
     <div id="planning">
       <h2>Choose 2 Actions</h2>
-      <button onclick="selectAction('attack')">Attack</button>
+      <button onclick="selectAction('strike')">Strike</button>
+      <button onclick="selectAction('pierce')">Pierce</button>
       <button onclick="selectAction('guard')">Guard</button>
-      <button onclick="selectAction('skill')">Skill</button>
-      <button onclick="selectAction('move')">Move</button>
+      <button onclick="selectAction('step')">Step</button>
+      <button onclick="selectAction('echoBurst')">Echo Burst</button>
       <p id="selectedActions"></p>
     </div>
 
-    <!-- EXECUTION -->
     <div id="execution" style="display:none;">
-      <h2 id="executionText"></h2>
-      <p>Press SPACE during green zone</p>
+      <h2 id="executionText">Execution</h2>
+      <p id="playerPrompt">Press SPACE to attack</p>
       <canvas id="canvas" width="400" height="200"></canvas>
     </div>
 
-    <!-- ENEMY -->
     <div id="enemy" style="display:none;">
-      <h2>Enemy Attack Incoming!</h2>
+      <h2 id="enemyTelegraphText">Enemy Attack Incoming!</h2>
+      <p id="enemyPrompt">Press SPACE to block</p>
       <canvas id="enemyCanvas" width="400" height="200"></canvas>
     </div>
 
     <div id="log"></div>
-
   </div>
 
   <script src="game.js"></script>

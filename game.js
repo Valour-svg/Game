@@ -1,3 +1,6 @@
+(function () {
+"use strict";
+
 // =======================
 // STATE
 // =======================
@@ -6,9 +9,17 @@ let phase = "planning";
 
 let playerHP = 100;
 let enemyHP = 100;
+let focus = 3;
+const MAX_FOCUS = 5;
 
 let lastTurnFirstAction = null;
 let currentTurnFirstAction = null;
+
+let currentEcho = null;
+let stepPrepared = false;
+let guardPrepared = false;
+let guardEchoShield = 0;
+let pierceEchoArmed = false;
 
 let canvas = document.getElementById("canvas");
 let ctx = canvas.getContext("2d");
@@ -17,11 +28,51 @@ let enemyCanvas = document.getElementById("enemyCanvas");
 let enemyCtx = enemyCanvas.getContext("2d");
 
 let awaitingInput = false;
+let lastLogText = "";
+
+const ENEMY_BAR_LEFT = 50;
+const ENEMY_BAR_WIDTH = 300;
+
+let currentEnemyAttackKey = null;
+let enemyAttackState = null;
+
+const playerActions = {
+  strike: { name: "Strike", cost: 0 },
+  pierce: { name: "Pierce", cost: 1 },
+  guard: { name: "Guard", cost: 0 },
+  step: { name: "Step", cost: 0 },
+  echoBurst: { name: "Echo Burst", cost: 2 },
+};
+
+const enemyAttacks = {
+  quick: {
+    name: "QUICK STRIKE",
+    zoneStartRatio: 0.80,
+    zoneWidthRatio: 0.06,
+    perfectDamage: 2,
+    failDamage: 10,
+  },
+  heavy: {
+    name: "HEAVY STRIKE",
+    zoneStartRatio: 0.70,
+    zoneWidthRatio: 0.20,
+    perfectDamage: 3,
+    failDamage: 18,
+  },
+  fakeout: {
+    name: "FAKE-OUT STRIKE",
+    zoneStartRatio: 0.77,
+    zoneWidthRatio: 0.12,
+    perfectDamage: 2,
+    failDamage: 14,
+  },
+};
 
 // =======================
 // INIT
 // =======================
 updateHP();
+updateResourcesUI();
 setPhase("planning");
 
 // =======================
@@ -29,30 +80,118 @@ setPhase("planning");
 // =======================
 function setPhase(newPhase) {
   phase = newPhase;
-  document.getElementById("phaseIndicator").innerText =
-    "Phase: " + newPhase.toUpperCase();
+
+  let label = newPhase.toUpperCase();
+  document.getElementById("phaseIndicator").innerText = "Phase: " + label;
+  document.body.setAttribute("data-phase", label);
+}
+
+// =======================
+// RESOURCES + ECHO
+// =======================
+function spendFocus(amount) {
+  focus = Math.max(0, focus - amount);
+  updateResourcesUI();
+}
+
+function gainFocus(amount) {
+  focus = Math.min(MAX_FOCUS, focus + amount);
+  updateResourcesUI();
+}
+
+function canUseAction(actionKey) {
+  let action = playerActions[actionKey];
+  return action && focus >= action.cost;
+}
+
+function setEcho(echoData) {
+  currentEcho = echoData;
+  updateResourcesUI();
+}
+
+function consumeEcho() {
+  let oldEcho = currentEcho;
+  currentEcho = null;
+  updateResourcesUI();
+  return oldEcho;
+}
+
+function actionToEcho(actionKey) {
+  if (!actionKey) return null;
+
+  if (actionKey === "strike") {
+    return { type: "strike", label: "Strike Echo" };
+  }
+
+  if (actionKey === "pierce") {
+    return { type: "pierce", label: "Pierce Echo" };
+  }
+
+  if (actionKey === "guard") {
+    return { type: "guard", label: "Guard Echo" };
+  }
+
+  if (actionKey === "step") {
+    return { type: "step", label: "Step Echo" };
+  }
+
+  return null;
+}
+
+function applyEchoStartOfTurn() {
+  if (!currentEcho) {
+    log("Echo: none");
+    return;
+  }
+
+  log("🔁 Echo ready: " + currentEcho.label);
+
+  if (currentEcho.type === "strike") {
+    enemyHP -= 4;
+    log("Echo deals 4 bonus damage.");
+    flashScreen("rgba(255,255,255,0.16)");
+    showFloatingText("ECHO +4", "#d6f1ff");
+  } else if (currentEcho.type === "pierce") {
+    pierceEchoArmed = true;
+    log("Pierce Echo armed: next successful timing gains bonus damage.");
+  } else if (currentEcho.type === "guard") {
+    guardEchoShield = 2;
+    log("Guard Echo active: incoming damage reduced by 2 this enemy turn.");
+  } else if (currentEcho.type === "step") {
+    stepPrepared = true;
+    log("Step Echo active: next player timing window is wider.");
+  }
+
+  updateHP();
 }
 
 // =======================
 // PLANNING
 // =======================
-function selectAction(action) {
+function selectAction(actionKey) {
   if (phase !== "planning") return;
 
+  if (!playerActions[actionKey]) return;
+
   if (selected.length === 0) {
-    selected.push(action);
-    currentTurnFirstAction = action;
+    selected.push(actionKey);
+    currentTurnFirstAction = actionKey;
   } else if (selected.length === 1) {
-    if (selected[0] === action) {
+    if (selected[0] === actionKey) {
       log("❌ Cannot repeat same action!");
       return;
     }
-    selected.push(action);
+
+    selected.push(actionKey);
     startExecution();
   }
 
   document.getElementById("selectedActions").innerText =
-    "Selected: " + selected.join(", ");
+    "Selected: " + selected.map(getActionName).join(", ");
+}
+
+function getActionName(actionKey) {
+  return playerActions[actionKey] ? playerActions[actionKey].name : actionKey;
 }
 
 // =======================
@@ -63,11 +202,10 @@ function startExecution() {
 
   document.getElementById("planning").style.display = "none";
   document.getElementById("execution").style.display = "block";
+  document.getElementById("enemy").style.display = "none";
 
-  if (lastTurnFirstAction) {
-    log("🔁 Echo: " + lastTurnFirstAction);
-    applyEcho(lastTurnFirstAction);
-  }
+  setEcho(actionToEcho(lastTurnFirstAction));
+  applyEchoStartOfTurn();
 
   runNextAction();
 }
@@ -78,150 +216,378 @@ function runNextAction() {
     return;
   }
 
-  let action = selected.shift();
+  let actionKey = selected.shift();
+  let action = playerActions[actionKey];
 
-  document.getElementById("executionText").innerText =
-    "Executing: " + action;
+  document.getElementById("executionText").innerText = "Action: " + action.name;
 
-  if (action === "attack") {
-    runTimingGame(resolveAttack);
-  } else {
-    log(action + " executed");
-    setTimeout(runNextAction, 600);
+  if (!canUseAction(actionKey)) {
+    log("❌ Not enough Focus for " + action.name + " (Cost: " + action.cost + ")");
+    setTimeout(runNextAction, 500);
+    return;
   }
+
+  if (action.cost > 0) {
+    spendFocus(action.cost);
+    log("Focus spent: " + action.cost + " on " + action.name + ".");
+  }
+
+  executePlayerAction(actionKey);
 }
 
-// =======================
-// TIMING GAME (PLAYER)
-// =======================
-function runTimingGame(callback) {
+function executePlayerAction(actionKey) {
+  if (actionKey === "strike") {
+    runPlayerAttackTiming({
+      speed: 2.6,
+      successStart: stepPrepared ? 130 : 145,
+      successEnd: stepPrepared ? 275 : 255,
+      hitDamage: 15,
+      weakDamage: 8,
+      label: "Strike",
+    });
+    stepPrepared = false;
+    return;
+  }
+
+  if (actionKey === "pierce") {
+    runPlayerAttackTiming({
+      speed: 3.4,
+      successStart: stepPrepared ? 160 : 175,
+      successEnd: stepPrepared ? 250 : 230,
+      hitDamage: 23,
+      weakDamage: 6,
+      label: "Pierce",
+    });
+    stepPrepared = false;
+    return;
+  }
+
+  if (actionKey === "guard") {
+    guardPrepared = true;
+    log("🛡️ Guard prepared: imperfect blocks take reduced damage this enemy turn.");
+    showFloatingText("GUARD", "#9cd4ff");
+    setTimeout(runNextAction, 450);
+    return;
+  }
+
+  if (actionKey === "step") {
+    stepPrepared = true;
+    log("👣 Step prepared: next player timing window is wider.");
+    showFloatingText("STEP", "#c7ffb7");
+    setTimeout(runNextAction, 450);
+    return;
+  }
+
+  // Echo Burst
+  if (!currentEcho) {
+    enemyHP -= 4;
+    log("Echo Burst fizzles (no Echo). Deals only 4 damage.");
+    showFloatingText("WEAK BURST", "#ffcf75");
+    updateHP();
+    if (enemyHP <= 0) return endGame("YOU WIN");
+    setTimeout(runNextAction, 450);
+    return;
+  }
+
+  let consumed = consumeEcho();
+  let burstDamage = 0;
+
+  if (consumed.type === "strike") {
+    burstDamage = 18;
+  } else if (consumed.type === "pierce") {
+    burstDamage = 26;
+  } else if (consumed.type === "guard") {
+    burstDamage = 10;
+    guardPrepared = true;
+  } else if (consumed.type === "step") {
+    burstDamage = 14;
+    stepPrepared = true;
+    gainFocus(1);
+  }
+
+  enemyHP -= burstDamage;
+  log("✨ Echo Burst consumes " + consumed.label + " for " + burstDamage + " damage!");
+  flashScreen("rgba(218, 190, 255, 0.28)");
+  showFloatingText("ECHO BURST", "#e0c2ff");
+  updateHP();
+
+  if (enemyHP <= 0) return endGame("YOU WIN");
+
+  setTimeout(runNextAction, 550);
+}
+
+function runPlayerAttackTiming(config) {
   let cursor = 0;
-  let speed = 3;
-  let successStart = 150;
-  let successEnd = 250;
 
   awaitingInput = true;
+  document.getElementById("playerPrompt").innerText = "Press SPACE to attack";
+  log("🎯 " + config.label + ": Press SPACE to attack");
 
-  log("🎯 PRESS SPACE!");
+  function finishAttack(success) {
+    awaitingInput = false;
+    window.onkeydown = null;
+
+    let dmg = success ? config.hitDamage : config.weakDamage;
+
+    if (success && pierceEchoArmed) {
+      dmg += 7;
+      pierceEchoArmed = false;
+      log("Pierce Echo bonus triggers (+7).");
+    }
+
+    enemyHP -= dmg;
+
+    if (success) {
+      log("💥 " + config.label + " PERFECT for " + dmg);
+      gainFocus(1);
+      flashScreen("rgba(255,255,255,0.26)");
+      showFloatingText("PERFECT", "#ffffff");
+    } else {
+      log("⚠️ " + config.label + " WEAK for " + dmg);
+      showFloatingText("WEAK", "#ffcf5a");
+    }
+
+    updateHP();
+
+    if (enemyHP <= 0) return endGame("YOU WIN");
+
+    setTimeout(runNextAction, 500);
+  }
 
   function loop() {
     if (!awaitingInput) return;
 
     ctx.clearRect(0, 0, 400, 200);
 
-    // success zone
-    ctx.fillStyle = "green";
-    ctx.fillRect(successStart, 80, successEnd - successStart, 40);
+    ctx.fillStyle = "#21c76c";
+    ctx.fillRect(config.successStart, 80, config.successEnd - config.successStart, 40);
 
-    // cursor
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "#ff4b4b";
     ctx.fillRect(cursor, 70, 5, 60);
 
-    cursor += speed;
-    if (cursor > 400) cursor = 0;
+    cursor += config.speed;
+
+    if (cursor >= 400) {
+      finishAttack(false);
+      return;
+    }
 
     requestAnimationFrame(loop);
   }
 
-  loop();
-
   window.onkeydown = function (e) {
-    if (e.code === "Space" && awaitingInput) {
-      awaitingInput = false;
+    if (e.code !== "Space" || !awaitingInput) return;
 
-      callback(cursor >= successStart && cursor <= successEnd);
-    }
+    let success = cursor >= config.successStart && cursor <= config.successEnd;
+    finishAttack(success);
   };
-}
 
-function resolveAttack(success) {
-  let dmg = success ? 20 : 8;
-
-  enemyHP -= dmg;
-
-  log(success ? "💥 Perfect! " + dmg : "⚠️ Weak " + dmg);
-
-  updateHP();
-
-  if (enemyHP <= 0) return endGame("YOU WIN");
-
-  setTimeout(runNextAction, 600);
+  loop();
 }
 
 // =======================
-// 🔁 ECHO
+// ENEMY PHASE
 // =======================
-function applyEcho(action) {
-  if (action === "attack") {
-    enemyHP -= 5;
-    log("Echo deals 5 dmg");
-  }
-
-  updateHP();
+function getRandomEnemyAttack() {
+  let attackKeys = Object.keys(enemyAttacks);
+  return attackKeys[Math.floor(Math.random() * attackKeys.length)];
 }
 
-// =======================
-// ENEMY PHASE (CLEAR TELEGRAPH)
-// =======================
 function startEnemyPhase() {
   setPhase("enemy");
 
   document.getElementById("execution").style.display = "none";
   document.getElementById("enemy").style.display = "block";
 
-  let x = 0;
-  let speed = 2;
-  let perfectStart = 180;
-  let perfectEnd = 220;
+  let attackKey = getRandomEnemyAttack();
+  runEnemyAttack(attackKey);
+}
+
+function runEnemyAttack(attackKey) {
+  let attack = enemyAttacks[attackKey];
+  if (!attack) return;
+
+  currentEnemyAttackKey = attackKey;
+
+  let zoneBonus = stepPrepared ? 0.08 : 0;
+  let zoneStart = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * attack.zoneStartRatio;
+  let zoneEnd = zoneStart + ENEMY_BAR_WIDTH * (attack.zoneWidthRatio + zoneBonus);
+  zoneEnd = Math.min(ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH, zoneEnd);
+
+  enemyAttackState = {
+    resolved: false,
+    cursorX: ENEMY_BAR_LEFT,
+    startTime: performance.now(),
+    zoneStart,
+    zoneEnd,
+  };
+
+  stepPrepared = false;
+
+  document.getElementById("enemyTelegraphText").innerText = "Enemy uses " + attack.name;
+  document.getElementById("enemyPrompt").innerText = "Press SPACE to block";
+
+  log("⚠️ Enemy uses " + attack.name);
 
   awaitingInput = true;
 
-  log("⚠️ Enemy Attack Incoming!");
+  window.onkeydown = function (e) {
+    if (e.code !== "Space" || !awaitingInput || enemyAttackState.resolved) return;
 
-  function loop() {
-    if (!awaitingInput) return;
+    let wasPerfect =
+      enemyAttackState.cursorX >= enemyAttackState.zoneStart &&
+      enemyAttackState.cursorX <= enemyAttackState.zoneEnd;
 
-    enemyCtx.clearRect(0, 0, 400, 200);
+    resolveEnemyAttack(attackKey, wasPerfect);
+  };
 
-    // bar
-    enemyCtx.fillStyle = "gray";
-    enemyCtx.fillRect(50, 90, 300, 20);
+  requestAnimationFrame(loopEnemyAttack);
+}
 
-    // perfect block zone
-    enemyCtx.fillStyle = "green";
-    enemyCtx.fillRect(perfectStart, 80, perfectEnd - perfectStart, 40);
+function loopEnemyAttack(now) {
+  if (!enemyAttackState || enemyAttackState.resolved) return;
 
-    // cursor
-    enemyCtx.fillStyle = "red";
-    enemyCtx.fillRect(50 + x, 70, 5, 60);
+  let progress = getEnemyAttackProgress(currentEnemyAttackKey, now - enemyAttackState.startTime);
+  enemyAttackState.cursorX = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * progress;
 
-    x += speed;
-    if (x > 300) x = 300;
+  drawEnemyTelegraph(
+    currentEnemyAttackKey,
+    enemyAttackState.cursorX,
+    enemyAttackState.zoneStart,
+    enemyAttackState.zoneEnd
+  );
 
-    requestAnimationFrame(loop);
+  if (progress >= 1) {
+    resolveEnemyAttack(currentEnemyAttackKey, false);
+    return;
   }
 
-  loop();
+  requestAnimationFrame(loopEnemyAttack);
+}
 
-  window.onkeydown = function (e) {
-    if (e.code === "Space" && awaitingInput) {
-      awaitingInput = false;
+function resolveEnemyAttack(attackKey, wasPerfect) {
+  let attack = enemyAttacks[attackKey];
+  if (!attack || !enemyAttackState || enemyAttackState.resolved) return;
 
-      let pos = 50 + x;
+  enemyAttackState.resolved = true;
+  awaitingInput = false;
+  window.onkeydown = null;
 
-      let dmg = (pos >= perfectStart && pos <= perfectEnd) ? 2 : 12;
+  let damage = wasPerfect ? attack.perfectDamage : attack.failDamage;
 
-      playerHP -= dmg;
+  if (!wasPerfect && guardPrepared) {
+    damage = Math.max(1, damage - 5);
+    log("Guard reduces imperfect block damage by 5.");
+  }
 
-      log(dmg === 2 ? "🛡️ PERFECT BLOCK!" : "💥 HIT!");
+  if (guardEchoShield > 0) {
+    damage = Math.max(0, damage - guardEchoShield);
+    log("Guard Echo reduces damage by " + guardEchoShield + ".");
+    guardEchoShield = 0;
+  }
 
-      updateHP();
+  guardPrepared = false;
 
-      if (playerHP <= 0) return endGame("YOU DIED");
+  playerHP -= damage;
 
-      setTimeout(resetTurn, 700);
+  if (wasPerfect) {
+    log("🛡️ BLOCK! " + attack.name + " reduced to " + damage + " dmg");
+    gainFocus(1);
+    flashScreen("rgba(103, 182, 255, 0.30)");
+    showFloatingText("BLOCK", "#8dc4ff");
+  } else {
+    log("💥 HIT! " + attack.name + " deals " + damage);
+    flashScreen("rgba(255, 80, 80, 0.28)");
+    showFloatingText("HIT", "#ff8f8f");
+  }
+
+  updateHP();
+
+  if (playerHP <= 0) return endGame("YOU DIED");
+
+  setTimeout(resetTurn, 700);
+}
+
+function getEnemyAttackProgress(attackKey, elapsedMs) {
+  if (attackKey === "quick") {
+    return Math.min(1, elapsedMs / 820);
+  }
+
+  if (attackKey === "heavy") {
+    let windUpPauseMs = 450;
+    let moveMs = 1500;
+
+    if (elapsedMs <= windUpPauseMs) {
+      return 0;
     }
-  };
+
+    let moveElapsed = elapsedMs - windUpPauseMs;
+    return Math.min(1, moveElapsed / moveMs);
+  }
+
+  // fakeout
+  let firstMoveMs = 700;
+  let pauseMs = 300;
+  let burstMs = 360;
+
+  if (elapsedMs <= firstMoveMs) {
+    return 0.52 * (elapsedMs / firstMoveMs);
+  }
+
+  if (elapsedMs <= firstMoveMs + pauseMs) {
+    return 0.52;
+  }
+
+  let burstElapsed = elapsedMs - firstMoveMs - pauseMs;
+  return Math.min(1, 0.52 + 0.48 * (burstElapsed / burstMs));
+}
+
+function drawEnemyTelegraph(attackKey, cursorX, zoneStart, zoneEnd) {
+  let attack = enemyAttacks[attackKey];
+
+  enemyCtx.clearRect(0, 0, 400, 200);
+
+  enemyCtx.fillStyle = "#444";
+  enemyCtx.fillRect(ENEMY_BAR_LEFT, 90, ENEMY_BAR_WIDTH, 20);
+
+  enemyCtx.fillStyle = "#22c971";
+  enemyCtx.fillRect(zoneStart, 80, zoneEnd - zoneStart, 40);
+
+  enemyCtx.fillStyle = "#f95f5f";
+  enemyCtx.fillRect(cursorX, 70, 5, 60);
+
+  enemyCtx.fillStyle = "#f1f1f1";
+  enemyCtx.font = "14px Arial";
+  enemyCtx.fillText(attack.name, 12, 20);
+  enemyCtx.fillText("SPACE = block", 12, 40);
+}
+
+// =======================
+// FEEDBACK HELPERS
+// =======================
+function flashScreen(color) {
+  let flash = document.getElementById("screenFlash");
+  flash.style.background = color;
+  flash.classList.add("show");
+
+  setTimeout(function () {
+    flash.classList.remove("show");
+  }, 140);
+}
+
+function showFloatingText(text, color) {
+  let layer = document.getElementById("floatingTextLayer");
+
+  let popup = document.createElement("div");
+  popup.className = "floating-text";
+  popup.style.color = color;
+  popup.innerText = text;
+
+  layer.appendChild(popup);
+
+  setTimeout(function () {
+    popup.remove();
+  }, 620);
 }
 
 // =======================
@@ -232,20 +598,30 @@ function resetTurn() {
   currentTurnFirstAction = null;
 
   selected = [];
+  currentEnemyAttackKey = null;
+  enemyAttackState = null;
+  pierceEchoArmed = false;
 
   document.getElementById("enemy").style.display = "none";
   document.getElementById("planning").style.display = "block";
   document.getElementById("selectedActions").innerText = "";
+  document.getElementById("enemyTelegraphText").innerText = "Enemy Attack Incoming!";
 
   setPhase("planning");
+  updateResourcesUI();
 }
 
 // =======================
-// HP
+// UI / STATS
 // =======================
 function updateHP() {
   document.getElementById("playerHP").innerText = playerHP;
   document.getElementById("enemyHP").innerText = enemyHP;
+}
+
+function updateResourcesUI() {
+  document.getElementById("focusValue").innerText = focus + " / " + MAX_FOCUS;
+  document.getElementById("echoValue").innerText = currentEcho ? currentEcho.label : "None";
 }
 
 // =======================
@@ -254,6 +630,7 @@ function updateHP() {
 function endGame(msg) {
   setPhase("ended");
   awaitingInput = false;
+  window.onkeydown = null;
 
   document.getElementById("planning").style.display = "none";
   document.getElementById("execution").style.display = "none";
@@ -266,5 +643,11 @@ function endGame(msg) {
 // LOG
 // =======================
 function log(text) {
+  if (text === lastLogText) return;
+
   document.getElementById("log").innerHTML += "<p>" + text + "</p>";
+  lastLogText = text;
 }
+
+window.selectAction = selectAction;
+})();
