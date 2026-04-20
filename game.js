@@ -18,6 +18,36 @@ let enemyCtx = enemyCanvas.getContext("2d");
 
 let awaitingInput = false;
 
+const ENEMY_BAR_LEFT = 50;
+const ENEMY_BAR_WIDTH = 300;
+
+const enemyAttacks = {
+  quick: {
+    key: "quick",
+    name: "QUICK STRIKE",
+    zoneStartRatio: 0.78,
+    zoneWidthRatio: 0.06,
+    failDamage: 10,
+    perfectDamage: () => Math.floor(Math.random() * 2) + 1,
+  },
+  heavy: {
+    key: "heavy",
+    name: "HEAVY STRIKE",
+    zoneStartRatio: 0.72,
+    zoneWidthRatio: 0.18,
+    failDamage: 18,
+    perfectDamage: () => 3,
+  },
+  fake: {
+    key: "fake",
+    name: "FAKE-OUT STRIKE",
+    zoneStartRatio: 0.76,
+    zoneWidthRatio: 0.12,
+    failDamage: 14,
+    perfectDamage: () => 2,
+  },
+};
+
 // =======================
 // INIT
 // =======================
@@ -128,6 +158,7 @@ function runTimingGame(callback) {
   window.onkeydown = function (e) {
     if (e.code === "Space" && awaitingInput) {
       awaitingInput = false;
+      window.onkeydown = null;
 
       callback(cursor >= successStart && cursor <= successEnd);
     }
@@ -161,67 +192,148 @@ function applyEcho(action) {
 }
 
 // =======================
-// ENEMY PHASE (CLEAR TELEGRAPH)
+// ENEMY PHASE
 // =======================
+function getRandomAttack() {
+  let attacks = Object.values(enemyAttacks);
+  return attacks[Math.floor(Math.random() * attacks.length)];
+}
+
 function startEnemyPhase() {
   setPhase("enemy");
 
   document.getElementById("execution").style.display = "none";
   document.getElementById("enemy").style.display = "block";
 
-  let x = 0;
-  let speed = 2;
-  let perfectStart = 180;
-  let perfectEnd = 220;
+  let attack = getRandomAttack();
+  runEnemyAttack(attack);
+}
+
+function runEnemyAttack(attack) {
+  let zoneStart = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * attack.zoneStartRatio;
+  let zoneEnd = zoneStart + ENEMY_BAR_WIDTH * attack.zoneWidthRatio;
+
+  let enemyLabel = document.getElementById("enemyTelegraphText");
+  if (enemyLabel) enemyLabel.innerText = "Enemy uses " + attack.name;
+
+  log("⚠️ Enemy uses " + attack.name);
+  log("🛡️ Press SPACE to block at impact!");
 
   awaitingInput = true;
 
-  log("⚠️ Enemy Attack Incoming!");
+  let resolved = false;
+  let cursorX = ENEMY_BAR_LEFT;
+  let startTime = performance.now();
 
-  function loop() {
-    if (!awaitingInput) return;
+  function resolveEnemyAttack(perfectBlock) {
+    if (resolved) return;
+    resolved = true;
+    awaitingInput = false;
+    window.onkeydown = null;
 
-    enemyCtx.clearRect(0, 0, 400, 200);
+    let damage = perfectBlock ? attack.perfectDamage() : attack.failDamage;
+    playerHP -= damage;
 
-    // bar
-    enemyCtx.fillStyle = "gray";
-    enemyCtx.fillRect(50, 90, 300, 20);
+    if (perfectBlock) {
+      log("🟢 PERFECT BLOCK vs " + attack.name + "! You take " + damage);
+    } else {
+      log("💥 " + attack.name + " hits! You take " + damage);
+    }
 
-    // perfect block zone
-    enemyCtx.fillStyle = "green";
-    enemyCtx.fillRect(perfectStart, 80, perfectEnd - perfectStart, 40);
+    updateHP();
 
-    // cursor
-    enemyCtx.fillStyle = "red";
-    enemyCtx.fillRect(50 + x, 70, 5, 60);
+    if (playerHP <= 0) return endGame("YOU DIED");
 
-    x += speed;
-    if (x > 300) x = 300;
+    setTimeout(resetTurn, 700);
+  }
+
+  function loop(now) {
+    if (resolved) return;
+
+    let progress = getAttackProgress(attack, now - startTime);
+    cursorX = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * progress;
+
+    drawEnemyTelegraph(attack, cursorX, zoneStart, zoneEnd);
+
+    if (progress >= 1) {
+      resolveEnemyAttack(false);
+      return;
+    }
 
     requestAnimationFrame(loop);
   }
 
-  loop();
-
   window.onkeydown = function (e) {
-    if (e.code === "Space" && awaitingInput) {
-      awaitingInput = false;
+    if (e.code !== "Space" || !awaitingInput || resolved) return;
 
-      let pos = 50 + x;
-
-      let dmg = (pos >= perfectStart && pos <= perfectEnd) ? 2 : 12;
-
-      playerHP -= dmg;
-
-      log(dmg === 2 ? "🛡️ PERFECT BLOCK!" : "💥 HIT!");
-
-      updateHP();
-
-      if (playerHP <= 0) return endGame("YOU DIED");
-
-      setTimeout(resetTurn, 700);
-    }
+    let perfect = cursorX >= zoneStart && cursorX <= zoneEnd;
+    resolveEnemyAttack(perfect);
   };
+
+  requestAnimationFrame(loop);
+}
+
+function getAttackProgress(attack, elapsedMs) {
+  if (attack.key === "quick") {
+    // very fast, almost no warning
+    return Math.min(1, elapsedMs / 800);
+  }
+
+  if (attack.key === "heavy") {
+    // slow wind-up, delayed impact
+    let windUpMs = 1300;
+    let holdMs = 500;
+    let finishMs = 500;
+
+    if (elapsedMs <= windUpMs) {
+      return 0.82 * (elapsedMs / windUpMs);
+    }
+
+    if (elapsedMs <= windUpMs + holdMs) {
+      return 0.82;
+    }
+
+    let finishElapsed = elapsedMs - windUpMs - holdMs;
+    return Math.min(1, 0.82 + 0.18 * (finishElapsed / finishMs));
+  }
+
+  // fake-out: normal start, pause, then burst fast
+  let firstMs = 850;
+  let pauseMs = 320;
+  let burstMs = 280;
+
+  if (elapsedMs <= firstMs) {
+    return 0.48 * (elapsedMs / firstMs);
+  }
+
+  if (elapsedMs <= firstMs + pauseMs) {
+    return 0.48;
+  }
+
+  let burstElapsed = elapsedMs - firstMs - pauseMs;
+  return Math.min(1, 0.48 + 0.52 * (burstElapsed / burstMs));
+}
+
+function drawEnemyTelegraph(attack, cursorX, zoneStart, zoneEnd) {
+  enemyCtx.clearRect(0, 0, 400, 200);
+
+  // attack bar
+  enemyCtx.fillStyle = "#555";
+  enemyCtx.fillRect(ENEMY_BAR_LEFT, 90, ENEMY_BAR_WIDTH, 20);
+
+  // perfect block zone
+  enemyCtx.fillStyle = "#20d070";
+  enemyCtx.fillRect(zoneStart, 80, zoneEnd - zoneStart, 40);
+
+  // cursor
+  enemyCtx.fillStyle = "#ff4545";
+  enemyCtx.fillRect(cursorX, 70, 5, 60);
+
+  // helper text
+  enemyCtx.fillStyle = "white";
+  enemyCtx.font = "14px Arial";
+  enemyCtx.fillText(attack.name, 12, 20);
+  enemyCtx.fillText("SPACE = block", 12, 40);
 }
 
 // =======================
@@ -254,6 +366,7 @@ function updateHP() {
 function endGame(msg) {
   setPhase("ended");
   awaitingInput = false;
+  window.onkeydown = null;
 
   document.getElementById("planning").style.display = "none";
   document.getElementById("execution").style.display = "none";
