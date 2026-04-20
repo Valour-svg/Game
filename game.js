@@ -17,6 +17,37 @@ let enemyCanvas = document.getElementById("enemyCanvas");
 let enemyCtx = enemyCanvas.getContext("2d");
 
 let awaitingInput = false;
+let lastLogText = "";
+
+const ENEMY_BAR_LEFT = 50;
+const ENEMY_BAR_WIDTH = 300;
+
+let currentEnemyAttackKey = null;
+let enemyAttackState = null;
+
+const enemyAttacks = {
+  quick: {
+    name: "QUICK STRIKE",
+    zoneStartRatio: 0.80,
+    zoneWidthRatio: 0.06,
+    perfectDamage: 2,
+    failDamage: 10,
+  },
+  heavy: {
+    name: "HEAVY STRIKE",
+    zoneStartRatio: 0.70,
+    zoneWidthRatio: 0.20,
+    perfectDamage: 3,
+    failDamage: 18,
+  },
+  fakeout: {
+    name: "FAKE-OUT STRIKE",
+    zoneStartRatio: 0.77,
+    zoneWidthRatio: 0.12,
+    perfectDamage: 2,
+    failDamage: 14,
+  },
+};
 
 // =======================
 // INIT
@@ -29,8 +60,10 @@ setPhase("planning");
 // =======================
 function setPhase(newPhase) {
   phase = newPhase;
-  document.getElementById("phaseIndicator").innerText =
-    "Phase: " + newPhase.toUpperCase();
+
+  let label = newPhase.toUpperCase();
+  document.getElementById("phaseIndicator").innerText = "Phase: " + label;
+  document.body.setAttribute("data-phase", label);
 }
 
 // =======================
@@ -47,6 +80,7 @@ function selectAction(action) {
       log("❌ Cannot repeat same action!");
       return;
     }
+
     selected.push(action);
     startExecution();
   }
@@ -63,6 +97,7 @@ function startExecution() {
 
   document.getElementById("planning").style.display = "none";
   document.getElementById("execution").style.display = "block";
+  document.getElementById("enemy").style.display = "none";
 
   if (lastTurnFirstAction) {
     log("🔁 Echo: " + lastTurnFirstAction);
@@ -79,9 +114,7 @@ function runNextAction() {
   }
 
   let action = selected.shift();
-
-  document.getElementById("executionText").innerText =
-    "Executing: " + action;
+  document.getElementById("executionText").innerText = "Executing: " + action;
 
   if (action === "attack") {
     runTimingGame(resolveAttack);
@@ -101,20 +134,19 @@ function runTimingGame(callback) {
   let successEnd = 250;
 
   awaitingInput = true;
+  document.getElementById("playerPrompt").innerText = "Press SPACE to attack";
 
-  log("🎯 PRESS SPACE!");
+  log("🎯 Press SPACE to attack");
 
   function loop() {
     if (!awaitingInput) return;
 
     ctx.clearRect(0, 0, 400, 200);
 
-    // success zone
-    ctx.fillStyle = "green";
+    ctx.fillStyle = "#21c76c";
     ctx.fillRect(successStart, 80, successEnd - successStart, 40);
 
-    // cursor
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "#ff4b4b";
     ctx.fillRect(cursor, 70, 5, 60);
 
     cursor += speed;
@@ -126,20 +158,26 @@ function runTimingGame(callback) {
   loop();
 
   window.onkeydown = function (e) {
-    if (e.code === "Space" && awaitingInput) {
-      awaitingInput = false;
+    if (e.code !== "Space" || !awaitingInput) return;
 
-      callback(cursor >= successStart && cursor <= successEnd);
-    }
+    awaitingInput = false;
+    window.onkeydown = null;
+    callback(cursor >= successStart && cursor <= successEnd);
   };
 }
 
 function resolveAttack(success) {
   let dmg = success ? 20 : 8;
-
   enemyHP -= dmg;
 
-  log(success ? "💥 Perfect! " + dmg : "⚠️ Weak " + dmg);
+  if (success) {
+    log("💥 PERFECT hit for " + dmg);
+    flashScreen("rgba(255,255,255,0.28)");
+    showFloatingText("PERFECT", "#ffffff");
+  } else {
+    log("⚠️ WEAK hit for " + dmg);
+    showFloatingText("WEAK", "#ffcf5a");
+  }
 
   updateHP();
 
@@ -161,67 +199,192 @@ function applyEcho(action) {
 }
 
 // =======================
-// ENEMY PHASE (CLEAR TELEGRAPH)
+// ENEMY PHASE
 // =======================
+function getRandomEnemyAttack() {
+  let attackKeys = Object.keys(enemyAttacks);
+  return attackKeys[Math.floor(Math.random() * attackKeys.length)];
+}
+
 function startEnemyPhase() {
   setPhase("enemy");
 
   document.getElementById("execution").style.display = "none";
   document.getElementById("enemy").style.display = "block";
 
-  let x = 0;
-  let speed = 2;
-  let perfectStart = 180;
-  let perfectEnd = 220;
+  let attackKey = getRandomEnemyAttack();
+  runEnemyAttack(attackKey);
+}
+
+function runEnemyAttack(attackKey) {
+  let attack = enemyAttacks[attackKey];
+  if (!attack) return;
+
+  currentEnemyAttackKey = attackKey;
+
+  let zoneStart = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * attack.zoneStartRatio;
+  let zoneEnd = zoneStart + ENEMY_BAR_WIDTH * attack.zoneWidthRatio;
+
+  enemyAttackState = {
+    resolved: false,
+    cursorX: ENEMY_BAR_LEFT,
+    startTime: performance.now(),
+    zoneStart,
+    zoneEnd,
+  };
+
+  let enemyLabel = document.getElementById("enemyTelegraphText");
+  enemyLabel.innerText = "Enemy uses " + attack.name;
+
+  let enemyPrompt = document.getElementById("enemyPrompt");
+  enemyPrompt.innerText = "Press SPACE to block";
+
+  log("⚠️ Enemy uses " + attack.name);
 
   awaitingInput = true;
 
-  log("⚠️ Enemy Attack Incoming!");
+  window.onkeydown = function (e) {
+    if (e.code !== "Space" || !awaitingInput || enemyAttackState.resolved) return;
 
-  function loop() {
-    if (!awaitingInput) return;
+    let wasPerfect =
+      enemyAttackState.cursorX >= enemyAttackState.zoneStart &&
+      enemyAttackState.cursorX <= enemyAttackState.zoneEnd;
 
-    enemyCtx.clearRect(0, 0, 400, 200);
+    resolveEnemyAttack(attackKey, wasPerfect);
+  };
 
-    // bar
-    enemyCtx.fillStyle = "gray";
-    enemyCtx.fillRect(50, 90, 300, 20);
+  requestAnimationFrame(loopEnemyAttack);
+}
 
-    // perfect block zone
-    enemyCtx.fillStyle = "green";
-    enemyCtx.fillRect(perfectStart, 80, perfectEnd - perfectStart, 40);
+function loopEnemyAttack(now) {
+  if (!enemyAttackState || enemyAttackState.resolved) return;
 
-    // cursor
-    enemyCtx.fillStyle = "red";
-    enemyCtx.fillRect(50 + x, 70, 5, 60);
+  let progress = getEnemyAttackProgress(currentEnemyAttackKey, now - enemyAttackState.startTime);
+  enemyAttackState.cursorX = ENEMY_BAR_LEFT + ENEMY_BAR_WIDTH * progress;
 
-    x += speed;
-    if (x > 300) x = 300;
+  drawEnemyTelegraph(
+    currentEnemyAttackKey,
+    enemyAttackState.cursorX,
+    enemyAttackState.zoneStart,
+    enemyAttackState.zoneEnd
+  );
 
-    requestAnimationFrame(loop);
+  if (progress >= 1) {
+    resolveEnemyAttack(currentEnemyAttackKey, false);
+    return;
   }
 
-  loop();
+  requestAnimationFrame(loopEnemyAttack);
+}
 
-  window.onkeydown = function (e) {
-    if (e.code === "Space" && awaitingInput) {
-      awaitingInput = false;
+function resolveEnemyAttack(attackKey, wasPerfect) {
+  let attack = enemyAttacks[attackKey];
+  if (!attack || !enemyAttackState || enemyAttackState.resolved) return;
 
-      let pos = 50 + x;
+  enemyAttackState.resolved = true;
+  awaitingInput = false;
+  window.onkeydown = null;
 
-      let dmg = (pos >= perfectStart && pos <= perfectEnd) ? 2 : 12;
+  let damage = wasPerfect ? attack.perfectDamage : attack.failDamage;
+  playerHP -= damage;
 
-      playerHP -= dmg;
+  if (wasPerfect) {
+    log("🛡️ BLOCK! " + attack.name + " reduced to " + damage + " dmg");
+    flashScreen("rgba(103, 182, 255, 0.30)");
+    showFloatingText("BLOCK", "#8dc4ff");
+  } else {
+    log("💥 HIT! " + attack.name + " deals " + damage);
+    flashScreen("rgba(255, 80, 80, 0.28)");
+    showFloatingText("HIT", "#ff8f8f");
+  }
 
-      log(dmg === 2 ? "🛡️ PERFECT BLOCK!" : "💥 HIT!");
+  updateHP();
 
-      updateHP();
+  if (playerHP <= 0) return endGame("YOU DIED");
 
-      if (playerHP <= 0) return endGame("YOU DIED");
+  setTimeout(resetTurn, 700);
+}
 
-      setTimeout(resetTurn, 700);
+function getEnemyAttackProgress(attackKey, elapsedMs) {
+  if (attackKey === "quick") {
+    return Math.min(1, elapsedMs / 820);
+  }
+
+  if (attackKey === "heavy") {
+    let windUpPauseMs = 450;
+    let moveMs = 1500;
+
+    if (elapsedMs <= windUpPauseMs) {
+      return 0;
     }
-  };
+
+    let moveElapsed = elapsedMs - windUpPauseMs;
+    return Math.min(1, moveElapsed / moveMs);
+  }
+
+  // fakeout
+  let firstMoveMs = 700;
+  let pauseMs = 300;
+  let burstMs = 360;
+
+  if (elapsedMs <= firstMoveMs) {
+    return 0.52 * (elapsedMs / firstMoveMs);
+  }
+
+  if (elapsedMs <= firstMoveMs + pauseMs) {
+    return 0.52;
+  }
+
+  let burstElapsed = elapsedMs - firstMoveMs - pauseMs;
+  return Math.min(1, 0.52 + 0.48 * (burstElapsed / burstMs));
+}
+
+function drawEnemyTelegraph(attackKey, cursorX, zoneStart, zoneEnd) {
+  let attack = enemyAttacks[attackKey];
+
+  enemyCtx.clearRect(0, 0, 400, 200);
+
+  enemyCtx.fillStyle = "#444";
+  enemyCtx.fillRect(ENEMY_BAR_LEFT, 90, ENEMY_BAR_WIDTH, 20);
+
+  enemyCtx.fillStyle = "#22c971";
+  enemyCtx.fillRect(zoneStart, 80, zoneEnd - zoneStart, 40);
+
+  enemyCtx.fillStyle = "#f95f5f";
+  enemyCtx.fillRect(cursorX, 70, 5, 60);
+
+  enemyCtx.fillStyle = "#f1f1f1";
+  enemyCtx.font = "14px Arial";
+  enemyCtx.fillText(attack.name, 12, 20);
+  enemyCtx.fillText("SPACE = block", 12, 40);
+}
+
+// =======================
+// FEEDBACK HELPERS
+// =======================
+function flashScreen(color) {
+  let flash = document.getElementById("screenFlash");
+  flash.style.background = color;
+  flash.classList.add("show");
+
+  setTimeout(function () {
+    flash.classList.remove("show");
+  }, 140);
+}
+
+function showFloatingText(text, color) {
+  let layer = document.getElementById("floatingTextLayer");
+
+  let popup = document.createElement("div");
+  popup.className = "floating-text";
+  popup.style.color = color;
+  popup.innerText = text;
+
+  layer.appendChild(popup);
+
+  setTimeout(function () {
+    popup.remove();
+  }, 620);
 }
 
 // =======================
@@ -232,10 +395,13 @@ function resetTurn() {
   currentTurnFirstAction = null;
 
   selected = [];
+  currentEnemyAttackKey = null;
+  enemyAttackState = null;
 
   document.getElementById("enemy").style.display = "none";
   document.getElementById("planning").style.display = "block";
   document.getElementById("selectedActions").innerText = "";
+  document.getElementById("enemyTelegraphText").innerText = "Enemy Attack Incoming!";
 
   setPhase("planning");
 }
@@ -254,6 +420,7 @@ function updateHP() {
 function endGame(msg) {
   setPhase("ended");
   awaitingInput = false;
+  window.onkeydown = null;
 
   document.getElementById("planning").style.display = "none";
   document.getElementById("execution").style.display = "none";
@@ -266,5 +433,8 @@ function endGame(msg) {
 // LOG
 // =======================
 function log(text) {
+  if (text === lastLogText) return;
+
   document.getElementById("log").innerHTML += "<p>" + text + "</p>";
+  lastLogText = text;
 }
