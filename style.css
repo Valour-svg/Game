@@ -1,26 +1,206 @@
 body {
-  font-family: Arial;
+  font-family: Arial, sans-serif;
   text-align: center;
   background: #111;
   color: white;
+  margin: 0;
+  padding: 24px 0;
 }
 
 button {
   margin: 5px;
   padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #5e5e5e;
+  background: #1f1f1f;
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2e2e2e;
+}
+
+button:disabled {
+  background: #2b2b2b;
+  border-color: #474747;
+  color: #8f8f8f;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.status-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.status-row p {
+  margin: 4px 0;
+}
+
+#echoValue {
+  color: #d3b5ff;
+  font-weight: bold;
+}
+
+#focusValue {
+  color: #ffe27d;
+  font-weight: bold;
+}
+
+#planningFocus {
+  color: #ffe27d;
+  margin: 6px 0;
+}
+
+.selected-slots {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 8px 0 14px;
+}
+
+.selected-slots span {
+  color: #a7e3ff;
+  font-weight: bold;
+}
+
+#actionPanel {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.action-card {
+  width: 210px;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background: #171717;
+  padding: 10px;
+  text-align: left;
+}
+
+.action-title {
+  font-weight: bold;
+  color: #d7f0ff;
+  margin-bottom: 4px;
+}
+
+.action-desc {
+  color: #c1c1c1;
+  font-size: 13px;
+  min-height: 30px;
+  margin-bottom: 6px;
+}
+
+#game {
+  position: relative;
 }
 
 canvas {
-  background: #222;
-  border: 2px solid white;
+  width: 400px;
+  height: 200px;
+  border: 2px solid #ffffff;
+  border-radius: 8px;
+}
+
+#canvas {
+  background: #1d1f30;
+  border-color: #8bc5ff;
+}
+
+#enemyCanvas {
+  background: #2a1a1a;
+  border-color: #ff9e9e;
 }
 
 #phaseIndicator {
-  color: cyan;
+  color: #76d3ff;
+  margin-bottom: 10px;
+}
+
+body[data-phase="PLANNING"] #phaseIndicator {
+  color: #6ed7ff;
+}
+
+body[data-phase="EXECUTION"] #phaseIndicator {
+  color: #82ff9f;
+}
+
+body[data-phase="ENEMY"] #phaseIndicator {
+  color: #ffae73;
+}
+
+body[data-phase="ENDED"] #phaseIndicator {
+  color: #ff6f6f;
 }
 
 #log {
-  margin-top: 20px;
+  margin: 20px auto 0;
   max-height: 200px;
+  width: 520px;
   overflow-y: auto;
+  text-align: left;
+  background: #161616;
+  border: 1px solid #363636;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+#log p {
+  margin: 6px 0;
+}
+
+#playerPrompt,
+#enemyPrompt {
+  margin: 6px 0 10px;
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+#screenFlash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 50;
+}
+
+#screenFlash.show {
+  opacity: 1;
+}
+
+#floatingTextLayer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 0;
+  pointer-events: none;
+}
+
+.floating-text {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  font-weight: bold;
+  animation: floatUp 620ms ease-out forwards;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 1;
+    top: 18px;
+  }
+  to {
+    opacity: 0;
+    top: -18px;
+  }
 }
