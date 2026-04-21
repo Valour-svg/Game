@@ -17,7 +17,7 @@
     <p>Player HP: <span id="playerHP">100</span></p>
     <p>Enemy HP: <span id="enemyHP">100</span></p>
     <p>Focus: <span id="focusValue">3 / 5</span></p>
-    <p>Current Echo: <span id="echoValue">None</span></p>
+    <p>Echo: <span id="echoValue">None</span></p>
   </div>
 
   <div id="game">
@@ -25,12 +25,14 @@
 
     <div id="planning">
       <h2>Choose 2 Actions</h2>
-      <button onclick="selectAction('strike')">Strike</button>
-      <button onclick="selectAction('pierce')">Pierce</button>
-      <button onclick="selectAction('guard')">Guard</button>
-      <button onclick="selectAction('step')">Step</button>
-      <button onclick="selectAction('echoBurst')">Echo Burst</button>
-      <p id="selectedActions"></p>
+      <p id="planningFocus">Planning Focus: 3 available</p>
+
+      <div class="selected-slots">
+        <p>Action 1: <span id="slot1">—</span></p>
+        <p>Action 2: <span id="slot2">—</span></p>
+      </div>
+
+      <div id="actionPanel"></div>
     </div>
 
     <div id="execution" style="display:none;">

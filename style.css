@@ -21,6 +21,13 @@ button:hover {
   background: #2e2e2e;
 }
 
+button:disabled {
+  background: #2b2b2b;
+  border-color: #474747;
+  color: #8f8f8f;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
 
 .status-row {
   display: flex;
@@ -36,10 +43,58 @@ button:hover {
 
 #echoValue {
   color: #d3b5ff;
+  font-weight: bold;
 }
 
 #focusValue {
   color: #ffe27d;
+  font-weight: bold;
+}
+
+#planningFocus {
+  color: #ffe27d;
+  margin: 6px 0;
+}
+
+.selected-slots {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 8px 0 14px;
+}
+
+.selected-slots span {
+  color: #a7e3ff;
+  font-weight: bold;
+}
+
+#actionPanel {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.action-card {
+  width: 210px;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background: #171717;
+  padding: 10px;
+  text-align: left;
+}
+
+.action-title {
+  font-weight: bold;
+  color: #d7f0ff;
+  margin-bottom: 4px;
+}
+
+.action-desc {
+  color: #c1c1c1;
+  font-size: 13px;
+  min-height: 30px;
+  margin-bottom: 6px;
 }
 
 #game {
@@ -87,7 +142,7 @@ body[data-phase="ENDED"] #phaseIndicator {
 #log {
   margin: 20px auto 0;
   max-height: 200px;
-  width: 460px;
+  width: 520px;
   overflow-y: auto;
   text-align: left;
   background: #161616;
