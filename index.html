@@ -10,7 +10,6 @@
   <div id="screenFlash"></div>
 
   <h1>Echo Fracture (Prototype)</h1>
-
   <h2 id="phaseIndicator">Phase: PLANNING</h2>
 
   <div class="status-row">
@@ -18,6 +17,25 @@
     <p>Enemy HP: <span id="enemyHP">100</span></p>
     <p>Focus: <span id="focusValue">3 / 5</span></p>
     <p>Echo: <span id="echoValue">None</span></p>
+  </div>
+
+  <div id="battlefieldWrap">
+    <div id="battlefield">
+      <div class="side player-side">
+        <div id="playerEntity" class="entity player-entity idle"></div>
+        <div id="echoAura"></div>
+        <p class="entity-label">Player</p>
+      </div>
+
+      <div id="battleCenterText"></div>
+
+      <div class="side enemy-side">
+        <div id="enemyEntity" class="entity enemy-entity idle"></div>
+        <p class="entity-label">Enemy</p>
+      </div>
+
+      <div id="enemyProjectile"></div>
+    </div>
   </div>
 
   <div id="game">

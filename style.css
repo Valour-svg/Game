@@ -51,6 +51,193 @@ button:disabled {
   font-weight: bold;
 }
 
+#battlefieldWrap {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 20px;
+}
+
+#battlefield {
+  width: 680px;
+  height: 180px;
+  border: 1px solid #3f3f3f;
+  border-radius: 12px;
+  background: linear-gradient(to bottom, #1e1e1e, #141414);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 50px;
+}
+
+.side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.entity {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  transition: transform 140ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.player-entity {
+  background: #4ea6ff;
+  box-shadow: 0 0 18px rgba(90, 170, 255, 0.45);
+}
+
+.enemy-entity {
+  background: #ff6666;
+  box-shadow: 0 0 18px rgba(255, 80, 80, 0.45);
+}
+
+.entity-label {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #cfcfcf;
+}
+
+.idle {
+  animation: idleBob 2.2s ease-in-out infinite;
+}
+
+@keyframes idleBob {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+#echoAura {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+#echoAura.active {
+  opacity: 0.55;
+}
+
+#echoAura.echo-strike {
+  background: radial-gradient(circle, rgba(255, 90, 90, 0.6), transparent 65%);
+}
+
+#echoAura.echo-guard {
+  background: radial-gradient(circle, rgba(90, 180, 255, 0.6), transparent 65%);
+}
+
+#echoAura.echo-step {
+  background: radial-gradient(circle, rgba(110, 255, 130, 0.6), transparent 65%);
+}
+
+#echoAura.echo-pierce {
+  background: radial-gradient(circle, rgba(255, 223, 90, 0.65), transparent 65%);
+}
+
+#battleCenterText {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  font-weight: bold;
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+#battleCenterText.show {
+  animation: centerPop 520ms ease-out forwards;
+}
+
+@keyframes centerPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -62%);
+  }
+}
+
+#enemyProjectile {
+  position: absolute;
+  width: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ff8a8a;
+  opacity: 0;
+  right: 110px;
+  top: 86px;
+}
+
+#enemyProjectile.fly {
+  opacity: 1;
+  animation: enemyProjectileFly 360ms linear forwards;
+}
+
+@keyframes enemyProjectileFly {
+  from {
+    transform: translateX(0px);
+  }
+  to {
+    transform: translateX(-430px);
+  }
+}
+
+.entity.hit-flash {
+  filter: brightness(1.8);
+}
+
+.entity.player-hit {
+  box-shadow: 0 0 22px rgba(255, 110, 110, 0.9);
+}
+
+.entity.enemy-hit {
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.95);
+}
+
+.player-lunge {
+  transform: translateX(18px) scale(1.05);
+}
+
+.player-step {
+  transform: translateX(-16px);
+}
+
+#battlefield.shake {
+  animation: battlefieldShake 160ms linear;
+}
+
+@keyframes battlefieldShake {
+  0% { transform: translateX(0px); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-3px); }
+  100% { transform: translateX(0px); }
+}
+
 #planningFocus {
   color: #ffe27d;
   margin: 6px 0;
